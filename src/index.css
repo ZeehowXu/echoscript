@@ -716,6 +716,12 @@ ul {
   margin-bottom: 0;
 }
 
+.vocab-init-status {
+  margin: 2rem 0;
+  text-align: center;
+  font-size: 1rem;
+}
+
 .vocab-import-success-dismiss {
   position: absolute;
   top: 8px;

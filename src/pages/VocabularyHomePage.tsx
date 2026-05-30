@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
 import { Layout } from "../components/Layout";
+import { initializeBuiltInVocabularyIfNeeded } from "../lib/vocabulary/builtin";
 import { VOCABULARY_CATEGORIES } from "../types/vocabulary";
 import {
   getVocabularyMemoryStateMap,
@@ -14,17 +15,46 @@ type ImportLocationState = {
   importSuccessMessage?: string;
 };
 
+type InitStatus = "loading" | "ready" | "failed";
+
 export function VocabularyHomePage() {
   const location = useLocation();
   const locationState = location.state as ImportLocationState | null;
   const importSuccessFromNav = locationState?.importSuccessMessage ?? null;
   const [importBannerDismissed, setImportBannerDismissed] = useState(false);
+  const [initStatus, setInitStatus] = useState<InitStatus>(() =>
+    getVocabularyItems().length > 0 ? "ready" : "loading",
+  );
 
   useEffect(() => {
     if (importSuccessFromNav) {
       window.history.replaceState({}, document.title);
     }
   }, [importSuccessFromNav]);
+
+  useEffect(() => {
+    if (getVocabularyItems().length > 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void initializeBuiltInVocabularyIfNeeded().then((result) => {
+      if (cancelled) return;
+      if (
+        result.status === "fetch_failed" ||
+        result.status === "validation_failed"
+      ) {
+        setInitStatus("failed");
+        return;
+      }
+      setInitStatus("ready");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const importSuccessMessage =
     importSuccessFromNav && !importBannerDismissed ? importSuccessFromNav : null;
@@ -37,6 +67,30 @@ export function VocabularyHomePage() {
   const categoriesWithItems = VOCABULARY_CATEGORIES.filter(
     (cat) => (grouped.get(cat)?.length ?? 0) > 0,
   );
+
+  if (initStatus === "loading") {
+    return (
+      <Layout backTo="/" backLabel="首页" title="Vocabulary Review">
+        <p className="practice-hint vocab-init-status">
+          Initializing built-in vocabulary…
+        </p>
+      </Layout>
+    );
+  }
+
+  if (initStatus === "failed") {
+    return (
+      <Layout backTo="/" backLabel="首页" title="Vocabulary Review">
+        <p className="form-error">
+          Failed to load built-in vocabulary. You can still import a TXT file
+          manually.
+        </p>
+        <Link to="/vocabulary/new" className="btn btn-primary">
+          Import TXT File
+        </Link>
+      </Layout>
+    );
+  }
 
   return (
     <Layout backTo="/" backLabel="首页" title="Vocabulary Review">
