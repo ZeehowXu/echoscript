@@ -19,7 +19,7 @@ export function VocabularyReviewPage() {
   const navigate = useNavigate();
   const [index, setIndex] = useState(0);
   const [queue] = useState(() => getReviewQueue());
-  const [showMeaning, setShowMeaning] = useState(false);
+  const [showAnswer, setShowAnswer] = useState(false);
   const [playState, setPlayState] = useState<PlaybackUiState>("idle");
   const [playNotice, setPlayNotice] = useState<string | null>(null);
   const [ttsUnsupported, setTtsUnsupported] = useState(!isTtsSupported());
@@ -78,7 +78,7 @@ export function VocabularyReviewPage() {
   }, []);
 
   const resetCardUi = () => {
-    setShowMeaning(false);
+    setShowAnswer(false);
     setPlayState("idle");
     setPlayNotice(null);
     setReplayCount(0);
@@ -96,7 +96,7 @@ export function VocabularyReviewPage() {
   };
 
   const handleMemoryResult = (result: VocabularyReviewResult) => {
-    if (!item || !showMeaning) return;
+    if (!item || !showAnswer) return;
     recordVocabularyReview(item.id, result, replayCount);
     window.setTimeout(() => {
       goNext();
@@ -167,14 +167,15 @@ export function VocabularyReviewPage() {
           >
             {isPlaying ? "Playing..." : "🔊 Replay"}
           </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setShowMeaning(true)}
-            disabled={showMeaning}
-          >
-            Check Answer
-          </button>
+          {!showAnswer && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowAnswer(true)}
+            >
+              Check Answer
+            </button>
+          )}
         </div>
 
         {(playNotice || playState === "failed") && (
@@ -191,7 +192,7 @@ export function VocabularyReviewPage() {
           </p>
         )}
 
-        {showMeaning && (
+        {showAnswer && (
           <div className="vocab-meaning-panel">
             <h3 className="result-label">中文释义</h3>
             <p className="vocab-meaning-zh">
@@ -223,32 +224,31 @@ export function VocabularyReviewPage() {
         )}
       </article>
 
-      <div className="vocab-review-footer">
-        <button
-          type="button"
-          className="btn btn-secondary vocab-footer-btn"
-          onClick={() => handleMemoryResult("fuzzy")}
-          disabled={!showMeaning}
-        >
-          🤔 Fuzzy
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary vocab-footer-btn"
-          onClick={() => handleMemoryResult("remembered")}
-          disabled={!showMeaning}
-        >
-          ✅ Remembered
-        </button>
-        <button
-          type="button"
-          className="btn btn-secondary vocab-footer-btn"
-          onClick={() => handleMemoryResult("forgot")}
-          disabled={!showMeaning}
-        >
-          ❌ Forgot
-        </button>
-      </div>
+      {showAnswer && (
+        <div className="vocab-review-footer">
+          <button
+            type="button"
+            className="btn btn-secondary vocab-footer-btn"
+            onClick={() => handleMemoryResult("fuzzy")}
+          >
+            🤔 Fuzzy
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary vocab-footer-btn"
+            onClick={() => handleMemoryResult("remembered")}
+          >
+            ✅ Remembered
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary vocab-footer-btn"
+            onClick={() => handleMemoryResult("forgot")}
+          >
+            ❌ Forgot
+          </button>
+        </div>
+      )}
     </Layout>
   );
 }

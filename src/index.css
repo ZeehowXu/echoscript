@@ -746,6 +746,141 @@ ul {
   color: #0f766e;
 }
 
+.vocab-review-hint {
+  margin: 12px 0 0;
+  text-align: center;
+}
+
+.vocab-status-overview {
+  margin-bottom: 20px;
+}
+
+.vocab-total-line {
+  margin: 0 0 14px;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.vocab-status-bar {
+  display: flex;
+  width: 100%;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--border);
+  margin-bottom: 12px;
+}
+
+.vocab-status-bar-segment {
+  height: 100%;
+  min-width: 0;
+  transition: width 0.2s ease;
+}
+
+.status-seg-new,
+.vocab-status-dot.status-seg-new {
+  background: #93c5fd;
+}
+
+.status-seg-fuzzy,
+.vocab-status-dot.status-seg-fuzzy {
+  background: #fbbf24;
+}
+
+.status-seg-remembered,
+.vocab-status-dot.status-seg-remembered {
+  background: #34d399;
+}
+
+.status-seg-forgot,
+.vocab-status-dot.status-seg-forgot {
+  background: #f87171;
+}
+
+.vocab-status-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.vocab-status-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vocab-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.vocab-status-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+@media (min-width: 640px) {
+  .vocab-status-cards {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.vocab-status-cards .stat-card {
+  text-align: left;
+  padding: 16px 14px;
+}
+
+.vocab-status-cards .stat-label {
+  margin-top: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.vocab-status-cards .stat-value {
+  font-size: 1.75rem;
+  margin: 6px 0 2px;
+}
+
+.vocab-status-cards .stat-sublabel {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.vocab-status-cards .stat-percent {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.stat-card-new {
+  border-left: 3px solid #93c5fd;
+}
+
+.stat-card-fuzzy {
+  border-left: 3px solid #fbbf24;
+}
+
+.stat-card-remembered {
+  border-left: 3px solid #34d399;
+}
+
+.stat-card-forgot {
+  border-left: 3px solid #f87171;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

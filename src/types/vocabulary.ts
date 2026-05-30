@@ -1,5 +1,10 @@
 export type VocabularyItemType = "word" | "phrase" | "collocation";
 export type VocabularyReviewResult = "remembered" | "fuzzy" | "forgot";
+export type VocabularyLearningStatus =
+  | "new"
+  | "fuzzy"
+  | "remembered"
+  | "forgot";
 export interface VocabularyExample {
   en: string;
   zh: string;
@@ -23,6 +28,7 @@ export interface VocabularyItem {
   text: string;
   type: VocabularyItemType;
   category: VocabularyCategory;
+  status: VocabularyLearningStatus;
   phonetic?: string;
   meaningZh: string;
   meaningEn?: string;
@@ -39,6 +45,7 @@ export interface VocabularyBatch {
   createdAt: string;
 }
 
+/** @deprecated Use VocabularyStatusStats from lib/vocabulary/status */
 export interface VocabularyStats {
   total: number;
   newCount: number;

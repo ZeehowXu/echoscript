@@ -3,19 +3,42 @@ import { Link, useLocation } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
 import { Layout } from "../components/Layout";
 import { initializeBuiltInVocabularyIfNeeded } from "../lib/vocabulary/builtin";
-import { VOCABULARY_CATEGORIES } from "../types/vocabulary";
 import {
-  getVocabularyMemoryStateMap,
-  getVocabularyItems,
-  getVocabularyStats,
-  groupItemsByCategory,
-} from "../lib/vocabularyStorage";
+  formatStatusPercent,
+  getVocabularyStatusStats,
+} from "../lib/vocabulary/status";
+import { getVocabularyItems } from "../lib/vocabularyStorage";
 
 type ImportLocationState = {
   importSuccessMessage?: string;
 };
 
 type InitStatus = "loading" | "ready" | "failed";
+
+const STATUS_SEGMENTS = [
+  { key: "new" as const, label: "New", className: "status-seg-new" },
+  { key: "fuzzy" as const, label: "Fuzzy", className: "status-seg-fuzzy" },
+  {
+    key: "remembered" as const,
+    label: "Remembered",
+    className: "status-seg-remembered",
+  },
+  { key: "forgot" as const, label: "Forgot", className: "status-seg-forgot" },
+];
+
+function getReviewHint(stats: ReturnType<typeof getVocabularyStatusStats>): string {
+  const strengthen = stats.forgot + stats.fuzzy;
+  if (strengthen > 0) {
+    return `You have ${strengthen} words to strengthen.`;
+  }
+  if (stats.total > 0 && stats.new === stats.total) {
+    return "No reviewed words yet. Start with new vocabulary.";
+  }
+  if (stats.total > 0 && stats.remembered === stats.total) {
+    return "All words remembered. Practice again if you want.";
+  }
+  return "";
+}
 
 export function VocabularyHomePage() {
   const location = useLocation();
@@ -60,13 +83,8 @@ export function VocabularyHomePage() {
     importSuccessFromNav && !importBannerDismissed ? importSuccessFromNav : null;
 
   const items = getVocabularyItems();
-  const memoryMap = getVocabularyMemoryStateMap();
-  const stats = getVocabularyStats();
-  const grouped = groupItemsByCategory(items);
-
-  const categoriesWithItems = VOCABULARY_CATEGORIES.filter(
-    (cat) => (grouped.get(cat)?.length ?? 0) > 0,
-  );
+  const statusStats = getVocabularyStatusStats(items);
+  const reviewHint = getReviewHint(statusStats);
 
   if (initStatus === "loading") {
     return (
@@ -92,24 +110,42 @@ export function VocabularyHomePage() {
     );
   }
 
+  if (items.length === 0) {
+    return (
+      <Layout backTo="/" backLabel="首页" title="Vocabulary Review">
+        <section className="vocab-hero">
+          <p className="vocab-subtitle">
+            Review IELTS listening words, phrases, and collocations.
+          </p>
+        </section>
+        <EmptyState
+          title="还没有词汇"
+          description="导入 TXT 或等待内置词库加载完成后开始复习。"
+          action={
+            <Link to="/vocabulary/new" className="btn btn-primary">
+              Add Vocabulary
+            </Link>
+          }
+        />
+      </Layout>
+    );
+  }
+
   return (
     <Layout backTo="/" backLabel="首页" title="Vocabulary Review">
       <section className="vocab-hero">
         <p className="vocab-subtitle">
-          Review unfamiliar words, phrases, and collocations.
+          Review IELTS listening words, phrases, and collocations.
         </p>
         <div className="hero-actions">
-          <Link to="/vocabulary/new" className="btn btn-primary">
+          <Link to="/vocabulary/review" className="btn btn-primary">
+            Start Review
+          </Link>
+          <Link to="/vocabulary/new" className="btn btn-secondary">
             Add Vocabulary
           </Link>
-          {items.length > 0 ? (
-            <Link to="/vocabulary/review" className="btn btn-secondary">
-              Start Review
-            </Link>
-          ) : (
-            <span className="btn btn-secondary btn-disabled">Start Review</span>
-          )}
         </div>
+        {reviewHint && <p className="practice-hint vocab-review-hint">{reviewHint}</p>}
       </section>
 
       {importSuccessMessage && (
@@ -128,97 +164,55 @@ export function VocabularyHomePage() {
         </div>
       )}
 
-      <section className="stats-grid">
-        <div className="stat-card">
-          <span className="stat-value">{stats.total}</span>
-          <span className="stat-label">Total Items</span>
+      <section className="vocab-status-overview">
+        <h2 className="section-title">Status Overview</h2>
+        <p className="vocab-total-line">
+          Total Vocabulary: <strong>{statusStats.total}</strong>
+        </p>
+
+        <div
+          className="vocab-status-bar"
+          role="img"
+          aria-label="Vocabulary status distribution"
+        >
+          {STATUS_SEGMENTS.map(({ key, className }) => {
+            const count = statusStats[key];
+            if (count === 0 || statusStats.total === 0) return null;
+            const width = (count / statusStats.total) * 100;
+            return (
+              <div
+                key={key}
+                className={`vocab-status-bar-segment ${className}`}
+                style={{ width: `${width}%` }}
+                title={`${key}: ${count}`}
+              />
+            );
+          })}
         </div>
-        <div className="stat-card">
-          <span className="stat-value">{stats.newCount}</span>
-          <span className="stat-label">New</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-value">{stats.learning}</span>
-          <span className="stat-label">Learning</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-value">{stats.remembered}</span>
-          <span className="stat-label">Remembered</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-value">{stats.dueNow}</span>
-          <span className="stat-label">Due Now</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-value">{stats.categories}</span>
-          <span className="stat-label">Categories</span>
-        </div>
+
+        <ul className="vocab-status-legend">
+          {STATUS_SEGMENTS.map(({ key, label }) => (
+            <li key={key}>
+              <span className={`vocab-status-dot status-seg-${key}`} />
+              {label} {statusStats[key]}
+            </li>
+          ))}
+        </ul>
       </section>
 
-      <section className="section">
-        <h2 className="section-title">Categories</h2>
-        {items.length === 0 ? (
-          <EmptyState
-            title="还没有词汇"
-            description="批量添加单词、词组或固定搭配，系统会自动分类。"
-            action={
-              <Link to="/vocabulary/new" className="btn btn-primary">
-                Add Vocabulary
-              </Link>
-            }
-          />
-        ) : (
-          <ul className="card-list">
-            {categoriesWithItems.map((category) => {
-              const categoryItems = grouped.get(category) ?? [];
-              const weak = categoryItems.filter((i) => {
-                const s = memoryMap.get(i.id);
-                return (
-                  !s ||
-                  s.reviewCount === 0 ||
-                  s.lastResult === "forgot" ||
-                  s.lastResult === "fuzzy"
-                );
-              }).length;
-              return (
-                <li key={category}>
-                  <div className="card">
-                    <div className="card-row">
-                      <h3 className="card-title">{category}</h3>
-                      <span className="card-meta">{categoryItems.length} items</span>
-                    </div>
-                    <p className="card-sub">
-                      {weak} weak · {categoryItems.length - weak} strengthening/stable
-                    </p>
-                    <ul className="vocab-preview-list">
-                      {categoryItems.slice(0, 4).map((item) => (
-                        <li key={item.id} className="vocab-preview-item">
-                          <span>{item.text}</span>
-                          <span
-                            className={`badge ${
-                              (memoryMap.get(item.id)?.lastResult ?? "new") === "remembered"
-                                ? "badge-vocab-known"
-                                : (memoryMap.get(item.id)?.lastResult ?? "new") === "fuzzy"
-                                  ? "badge-vocab-learning"
-                                  : "badge-vocab-new"
-                            }`}
-                          >
-                            {memoryMap.get(item.id)?.lastResult ?? "new"}
-                          </span>
-                        </li>
-                      ))}
-                      {categoryItems.length > 4 && (
-                        <li className="vocab-preview-more">
-                          +{categoryItems.length - 4} more
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+      <section className="vocab-status-cards">
+        {STATUS_SEGMENTS.map(({ key, label }) => (
+          <div key={key} className={`stat-card stat-card-${key}`}>
+            <span className="stat-label">{label}</span>
+            <span className="stat-value">{statusStats[key]}</span>
+            <span className="stat-sublabel">
+              {statusStats[key] === 1 ? "word" : "words"}
+            </span>
+            <span className="stat-percent">
+              {formatStatusPercent(statusStats[key], statusStats.total)}
+            </span>
+          </div>
+        ))}
       </section>
     </Layout>
   );

@@ -14,6 +14,12 @@ import {
   TYPO_MEANING_ZH,
 } from "./vocabulary/assist";
 import { normalizeVocabularyKey } from "./vocabulary/normalize";
+import {
+  getVocabularyStatusStats,
+  normalizeVocabularyStatus,
+  statusReviewPriority,
+  type VocabularyLearningStatus,
+} from "./vocabulary/status";
 
 const KEYS = {
   items: "echoscript_vocabulary_items",
@@ -62,6 +68,23 @@ function rememberedIntervalDays(consecutiveRemembered: number): number {
   if (consecutiveRemembered === 3) return 7;
   if (consecutiveRemembered === 4) return 14;
   return 30;
+}
+
+function resolveItemStatus(
+  rawStatus: unknown,
+  memory?: VocabularyMemoryState,
+): VocabularyLearningStatus {
+  if (
+    rawStatus !== undefined &&
+    rawStatus !== null &&
+    (typeof rawStatus !== "string" || rawStatus.trim() !== "")
+  ) {
+    return normalizeVocabularyStatus(rawStatus);
+  }
+  if (memory && memory.reviewCount > 0 && memory.lastResult) {
+    return normalizeVocabularyStatus(memory.lastResult);
+  }
+  return "new";
 }
 
 function repairVocabularyItem(item: VocabularyItem): {
@@ -126,19 +149,27 @@ function repairVocabularyItem(item: VocabularyItem): {
 }
 
 function loadAndRepairItems(): VocabularyItem[] {
-  const raw = readJson<VocabularyItem[]>(KEYS.items, []);
+  const raw = readJson<Array<VocabularyItem & { status?: unknown }>>(KEYS.items, []);
+  const memoryById = new Map(
+    readJson<VocabularyMemoryState[]>(KEYS.memoryStates, []).map((s) => [
+      s.vocabularyId,
+      s,
+    ]),
+  );
   let anyChanged = false;
 
   const repaired = raw.map((rawItem) => {
-    const normalizedExamples = Array.isArray((rawItem as VocabularyItem).examples)
-      ? (rawItem as VocabularyItem).examples
+    const normalizedExamples = Array.isArray(rawItem.examples)
+      ? rawItem.examples
       : [];
+    const status = resolveItemStatus(rawItem.status, memoryById.get(rawItem.id));
     const item: VocabularyItem = {
       id: rawItem.id,
       text: rawItem.text,
       type: rawItem.type,
       category: rawItem.category,
-      phonetic: (rawItem as VocabularyItem).phonetic,
+      status,
+      phonetic: rawItem.phonetic,
       meaningZh: rawItem.meaningZh,
       meaningEn: rawItem.meaningEn,
       examples: normalizedExamples,
@@ -146,8 +177,9 @@ function loadAndRepairItems(): VocabularyItem[] {
       createdAt: rawItem.createdAt,
       updatedAt: rawItem.updatedAt,
     };
-    const { item: fixed, changed } = repairVocabularyItem(item);
-    if (changed) anyChanged = true;
+    const { item: fixed, changed: meaningChanged } = repairVocabularyItem(item);
+    const statusChanged = fixed.status !== status;
+    if (meaningChanged || statusChanged) anyChanged = true;
     return fixed;
   });
 
@@ -390,6 +422,16 @@ export function recordVocabularyReview(
   }
 
   upsertVocabularyMemoryState(next);
+
+  const item = getVocabularyItemById(vocabularyId);
+  if (item) {
+    updateVocabularyItem({
+      ...item,
+      status: normalizeVocabularyStatus(result),
+      updatedAt: now,
+    });
+  }
+
   saveVocabularyReviewEvent({
     vocabularyId,
     result,
@@ -399,72 +441,28 @@ export function recordVocabularyReview(
   return next;
 }
 
+/** @deprecated Use getVocabularyStatusStats from ./vocabulary/status */
 export function getVocabularyStats(): VocabularyStats {
-  const items = getVocabularyItems();
-  const states = getVocabularyMemoryStates();
-  const categories = new Set(items.map((i) => i.category));
-  const stateMap = new Map(states.map((s) => [s.vocabularyId, s]));
-  const now = Date.now();
-
-  let newCount = 0;
-  let learning = 0;
-  let remembered = 0;
-  let dueNow = 0;
-
-  for (const item of items) {
-    const state = stateMap.get(item.id) ?? defaultMemoryState(item.id);
-    if (state.reviewCount === 0) {
-      newCount += 1;
-    }
-    if (state.nextReviewAt && new Date(state.nextReviewAt).getTime() <= now) {
-      dueNow += 1;
-    }
-    if (state.consecutiveRemembered >= 2) {
-      remembered += 1;
-    } else if (
-      state.reviewCount > 0 &&
-      state.fuzzyCount + state.forgotCount >= state.rememberedCount
-    ) {
-      learning += 1;
-    }
-  }
-
+  const statusStats = getVocabularyStatusStats(getVocabularyItems());
   return {
-    total: items.length,
-    newCount,
-    learning,
-    remembered,
-    dueNow,
-    categories: categories.size,
+    total: statusStats.total,
+    newCount: statusStats.new,
+    learning: statusStats.fuzzy,
+    remembered: statusStats.remembered,
+    dueNow: statusStats.forgot + statusStats.fuzzy,
+    categories: 0,
   };
 }
 
+export { getVocabularyStatusStats } from "./vocabulary/status";
+
 export function getReviewQueue(): VocabularyItem[] {
   const items = getVocabularyItems();
-  const states = getVocabularyMemoryStates();
-  const stateMap = new Map(states.map((s) => [s.vocabularyId, s]));
-  const now = Date.now();
-
-  const bucket = (state: VocabularyMemoryState): number => {
-    const nextAt = state.nextReviewAt ? new Date(state.nextReviewAt).getTime() : 0;
-    if (state.nextReviewAt && nextAt <= now) return 0;
-    if (state.reviewCount === 0) return 1;
-    if (state.forgotCount + state.fuzzyCount > state.rememberedCount) return 2;
-    return 3;
-  };
 
   return [...items].sort((a, b) => {
-    const sa = stateMap.get(a.id) ?? defaultMemoryState(a.id);
-    const sb = stateMap.get(b.id) ?? defaultMemoryState(b.id);
-    const ba = bucket(sa);
-    const bb = bucket(sb);
-    if (ba !== bb) return ba - bb;
-    if ((sa.memoryStrength ?? 0) !== (sb.memoryStrength ?? 0)) {
-      return (sa.memoryStrength ?? 0) - (sb.memoryStrength ?? 0);
-    }
-    const na = sa.nextReviewAt ? new Date(sa.nextReviewAt).getTime() : 0;
-    const nb = sb.nextReviewAt ? new Date(sb.nextReviewAt).getTime() : 0;
-    if (na !== nb) return na - nb;
+    const pa = statusReviewPriority(normalizeVocabularyStatus(a.status));
+    const pb = statusReviewPriority(normalizeVocabularyStatus(b.status));
+    if (pa !== pb) return pa - pb;
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 }

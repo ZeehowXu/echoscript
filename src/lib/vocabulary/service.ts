@@ -226,6 +226,7 @@ function cardToNewItem(card: ParsedVocabularyCard, now: string): VocabularyItem 
     text: card.text,
     type: card.type,
     category: card.category,
+    status: "new",
     phonetic: card.phonetic,
     meaningZh: card.meaningZh,
     meaningEn: "",
