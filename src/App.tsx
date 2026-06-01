@@ -13,6 +13,8 @@ import { WrongBookPage } from "./pages/WrongBookPage";
 import { AddVocabularyPage } from "./pages/AddVocabularyPage";
 import { VocabularyHomePage } from "./pages/VocabularyHomePage";
 import { VocabularyReviewPage } from "./pages/VocabularyReviewPage";
+import { VocabularyDictationHomePage } from "./pages/VocabularyDictationHomePage";
+import { VocabularyDictationPracticePage } from "./pages/VocabularyDictationPracticePage";
 
 function DictationPageRoute() {
   const { sentenceId } = useParams();
@@ -34,6 +36,14 @@ export default function App() {
         <Route path="/vocabulary" element={<VocabularyHomePage />} />
         <Route path="/vocabulary/new" element={<AddVocabularyPage />} />
         <Route path="/vocabulary/review" element={<VocabularyReviewPage />} />
+        <Route
+          path="/vocabulary/dictation"
+          element={<VocabularyDictationHomePage />}
+        />
+        <Route
+          path="/vocabulary/dictation/practice"
+          element={<VocabularyDictationPracticePage />}
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

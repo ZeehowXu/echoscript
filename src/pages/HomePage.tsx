@@ -17,10 +17,35 @@ export function HomePage() {
           <Link to="/wrong-book" className="btn btn-secondary">
             错题本
           </Link>
-          <Link to="/vocabulary" className="btn btn-secondary">
-            Vocabulary
-          </Link>
         </div>
+      </section>
+
+      <section className="section home-modules">
+        <h2 className="section-title">Vocabulary</h2>
+        <ul className="card-list">
+          <li>
+            <Link to="/vocabulary" className="card card-link home-module-card">
+              <h3 className="card-title">Vocabulary Review</h3>
+              <p className="card-sub">
+                Review IELTS listening words, phrases, and collocations.
+              </p>
+            </Link>
+          </li>
+          <li>
+            <Link
+              to="/vocabulary/dictation"
+              className="card card-link home-module-card"
+            >
+              <h3 className="card-title">Vocabulary Dictation</h3>
+              <p className="card-sub">
+                Listen and spell IELTS vocabulary.
+              </p>
+              <p className="card-sub card-sub-muted">
+                Practice spelling words by listening to pronunciation.
+              </p>
+            </Link>
+          </li>
+        </ul>
       </section>
 
       <section className="section">
