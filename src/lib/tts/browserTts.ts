@@ -1,3 +1,4 @@
+import { primeSpeechSynthesisBeforeAutoPlay } from "./device";
 import { TtsError } from "./types";
 
 export const BROWSER_TTS_RATE = 0.9;
@@ -189,8 +190,14 @@ export function cancelBrowserTts(): void {
   synthesis()?.cancel();
 }
 
+export const BROWSER_SPEAK_TIMEOUT_MS = 10_000;
+
 export interface BrowserSpeakOptions {
   voiceName?: string | null;
+  /** Max wait for onend/onerror before rejecting (mobile Safari may never fire). */
+  timeoutMs?: number;
+  /** Run lightweight resume/getVoices before speak (use for per-card auto-play). */
+  primeBeforeSpeak?: boolean;
 }
 
 export function speakText(
@@ -211,52 +218,77 @@ export function speakText(
         return;
       }
 
-      try {
-        await waitForEnglishVoices();
-      } catch (error) {
-        reject(error);
-        return;
+      if (options.primeBeforeSpeak) {
+        primeSpeechSynthesisBeforeAutoPlay();
       }
 
       syn.cancel();
+      if (syn.paused) {
+        syn.resume();
+      }
 
       const voice = resolveVoice(options.voiceName);
       if (!voice) {
-        reject(new TtsError("NO_VOICE"));
-        return;
+        void waitForEnglishVoices()
+          .then((voices) => {
+            if (!selectedVoiceName) {
+              selectedVoiceName = pickBestEnglishVoice(voices)?.name ?? null;
+            }
+          })
+          .catch(() => {
+            /* use the browser default voice for this attempt */
+          });
       }
 
       const utterance = new SpeechSynthesisUtterance(trimmed);
-      utterance.voice = voice;
-      utterance.lang = voice.lang;
+      if (voice) {
+        utterance.voice = voice;
+      }
+      utterance.lang = voice?.lang ?? "en-US";
       utterance.rate = BROWSER_TTS_RATE;
       utterance.pitch = BROWSER_TTS_PITCH;
       utterance.volume = BROWSER_TTS_VOLUME;
 
       let settled = false;
+      const timeoutMs = options.timeoutMs ?? BROWSER_SPEAK_TIMEOUT_MS;
+
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        cleanup();
+        fn();
+      };
 
       const cleanup = () => {
         utterance.onend = null;
         utterance.onerror = null;
       };
 
+      const timeoutId = window.setTimeout(() => {
+        syn.cancel();
+        finish(() =>
+          reject(
+            new TtsError(
+              "PLAYBACK_FAILED",
+              "Playback timed out. Tap Replay to try again.",
+            ),
+          ),
+        );
+      }, timeoutMs);
+
       utterance.onend = () => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        resolve({ voiceName: voice.name });
+        finish(() => resolve({ voiceName: voice?.name ?? "default" }));
       };
 
       utterance.onerror = () => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(new TtsError("PLAYBACK_FAILED"));
+        finish(() => reject(new TtsError("PLAYBACK_FAILED")));
       };
 
-      window.setTimeout(() => {
-        syn.speak(utterance);
-      }, 60);
+      syn.speak(utterance);
+      if (syn.paused) {
+        syn.resume();
+      }
     })();
   });
 }

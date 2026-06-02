@@ -7,7 +7,12 @@ import {
   formatStatusPercent,
   getVocabularyStatusStats,
 } from "../lib/vocabulary/status";
-import { getVocabularyItems } from "../lib/vocabularyStorage";
+import {
+  markTtsPreplayedForItem,
+  prepareSpeechSynthesisForPlayback,
+  speakText,
+} from "../lib/tts";
+import { getReviewQueue, getVocabularyItems } from "../lib/vocabularyStorage";
 
 type ImportLocationState = {
   importSuccessMessage?: string;
@@ -86,6 +91,17 @@ export function VocabularyHomePage() {
   const statusStats = getVocabularyStatusStats(items);
   const reviewHint = getReviewHint(statusStats);
 
+  const handleStartReview = () => {
+    prepareSpeechSynthesisForPlayback();
+    const firstItem = getReviewQueue()[0];
+    if (!firstItem) return;
+    void speakText(firstItem.text)
+      .then(() => markTtsPreplayedForItem(firstItem.id))
+      .catch(() => {
+        /* review page will auto-play if preplay failed */
+      });
+  };
+
   if (initStatus === "loading") {
     return (
       <Layout backTo="/" backLabel="首页" title="Vocabulary Review">
@@ -138,7 +154,11 @@ export function VocabularyHomePage() {
           Review IELTS listening words, phrases, and collocations.
         </p>
         <div className="hero-actions">
-          <Link to="/vocabulary/review" className="btn btn-primary">
+          <Link
+            to="/vocabulary/review"
+            className="btn btn-primary"
+            onClick={handleStartReview}
+          >
             Start Review
           </Link>
           <Link to="/vocabulary/new" className="btn btn-secondary">

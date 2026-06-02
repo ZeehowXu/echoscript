@@ -6,7 +6,9 @@ import {
   recordVocabularyReview,
 } from "../lib/vocabularyStorage";
 import {
+  consumeTtsPreplayedForItem,
   isTtsSupported,
+  MOBILE_TTS_PLAY_HINT,
   speakText,
   stopPlayback,
   TtsError,
@@ -51,7 +53,7 @@ export function VocabularyReviewPage() {
     setTtsUnsupported(false);
 
     try {
-      await speakText(item.text);
+      await speakText(item.text, { primeBeforeSpeak: !isReplay });
 
       if (generation !== playGenerationRef.current) return;
       setPlayState("idle");
@@ -60,15 +62,29 @@ export function VocabularyReviewPage() {
       if (error instanceof TtsError && error.code === "NOT_SUPPORTED") {
         setTtsUnsupported(true);
       }
+      const message =
+        error instanceof TtsError && error.message
+          ? error.message
+          : "Audio unavailable. Please try again.";
       if (isReplay) {
         setPlayState("failed");
-        setPlayNotice("Audio unavailable. Please try again.");
+        setPlayNotice(message);
       } else {
         setPlayState("idle");
-        setPlayNotice("Tap Replay to play audio.");
+        setPlayNotice(MOBILE_TTS_PLAY_HINT);
       }
     }
   }, [item]);
+
+  const handleReplayPress = () => {
+    if (playState === "playing") {
+      stopPlayback();
+      playGenerationRef.current += 1;
+      setPlayState("idle");
+      return;
+    }
+    void runPlayback(true);
+  };
 
   useEffect(() => {
     return () => {
@@ -108,6 +124,11 @@ export function VocabularyReviewPage() {
     if (autoPlayedItemIdRef.current === item.id) return;
 
     autoPlayedItemIdRef.current = item.id;
+
+    if (consumeTtsPreplayedForItem(item.id)) {
+      return;
+    }
+
     const timer = window.setTimeout(() => {
       void runPlayback(false);
     }, 120);
@@ -162,10 +183,9 @@ export function VocabularyReviewPage() {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => void runPlayback(true)}
-            disabled={isPlaying}
+            onClick={handleReplayPress}
           >
-            {isPlaying ? "Playing..." : "🔊 Replay"}
+            {isPlaying ? "Stop" : "🔊 Replay"}
           </button>
           {!showAnswer && (
             <button

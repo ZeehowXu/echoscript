@@ -5,8 +5,14 @@ import { Layout } from "../components/Layout";
 import { initializeBuiltInVocabularyIfNeeded } from "../lib/vocabulary/builtin";
 import {
   formatDictationPercent,
+  getDictationPracticeQueue,
   getDictationStatusStats,
 } from "../lib/vocabulary/dictationStorage";
+import {
+  markTtsPreplayedForItem,
+  prepareSpeechSynthesisForPlayback,
+  speakText,
+} from "../lib/tts";
 import { getVocabularyItems } from "../lib/vocabularyStorage";
 
 type InitStatus = "loading" | "ready" | "failed";
@@ -57,6 +63,17 @@ export function VocabularyDictationHomePage() {
   const items = getVocabularyItems();
   const stats = getDictationStatusStats(items);
 
+  const handleStartDictation = () => {
+    prepareSpeechSynthesisForPlayback();
+    const firstItem = getDictationPracticeQueue(items)[0];
+    if (!firstItem) return;
+    void speakText(firstItem.text)
+      .then(() => markTtsPreplayedForItem(firstItem.id))
+      .catch(() => {
+        /* practice page will auto-play if preplay failed */
+      });
+  };
+
   if (initStatus === "loading") {
     return (
       <Layout backTo="/" backLabel="首页" title="Vocabulary Dictation">
@@ -95,7 +112,11 @@ export function VocabularyDictationHomePage() {
           Listen to each word and type the correct spelling.
         </p>
         <div className="hero-actions">
-          <Link to="/vocabulary/dictation/practice" className="btn btn-primary">
+          <Link
+            to="/vocabulary/dictation/practice"
+            className="btn btn-primary"
+            onClick={handleStartDictation}
+          >
             Start Dictation
           </Link>
         </div>

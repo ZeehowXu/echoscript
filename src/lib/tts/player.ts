@@ -57,6 +57,8 @@ export interface PlaySentenceOptions {
   preferCloud?: boolean;
   /** Override sentence.voice for browser TTS */
   voiceName?: string;
+  /** Lightweight resume before browser TTS (per-card auto-play). */
+  primeBeforeSpeak?: boolean;
 }
 
 type SentenceAudioFields = Pick<
@@ -104,6 +106,7 @@ export async function playSentence(
   try {
     const { voiceName } = await speakText(sentence.textEn, {
       voiceName: options.voiceName ?? sentence.voice ?? null,
+      primeBeforeSpeak: options.primeBeforeSpeak,
     });
     return {
       provider: "browser",

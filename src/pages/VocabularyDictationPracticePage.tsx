@@ -10,7 +10,9 @@ import {
 import { getDisplayMeaningZh } from "../lib/vocabulary/assist";
 import { getVocabularyItems } from "../lib/vocabularyStorage";
 import {
+  consumeTtsPreplayedForItem,
   isTtsSupported,
+  MOBILE_TTS_PLAY_HINT,
   speakText,
   stopPlayback,
   TtsError,
@@ -38,7 +40,7 @@ export function VocabularyDictationPracticePage() {
   const autoPlayedItemIdRef = useRef<string | null>(null);
   const item = queue[index];
 
-  const runPlayback = useCallback(async () => {
+  const runPlayback = useCallback(async (isManualReplay = false) => {
     if (!item) return;
 
     if (!isTtsSupported()) {
@@ -54,7 +56,7 @@ export function VocabularyDictationPracticePage() {
     setTtsUnsupported(false);
 
     try {
-      await speakText(item.text);
+      await speakText(item.text, { primeBeforeSpeak: !isManualReplay });
       if (generation !== playGenerationRef.current) return;
       setPlayState("idle");
     } catch (error) {
@@ -62,10 +64,24 @@ export function VocabularyDictationPracticePage() {
       if (error instanceof TtsError && error.code === "NOT_SUPPORTED") {
         setTtsUnsupported(true);
       }
+      const message =
+        error instanceof TtsError && error.message
+          ? error.message
+          : MOBILE_TTS_PLAY_HINT;
       setPlayState("idle");
-      setPlayNotice("Tap Replay to play audio.");
+      setPlayNotice(message);
     }
   }, [item]);
+
+  const handleReplayPress = () => {
+    if (playState === "playing") {
+      stopPlayback();
+      playGenerationRef.current += 1;
+      setPlayState("idle");
+      return;
+    }
+    void runPlayback(true);
+  };
 
   useEffect(() => {
     return () => {
@@ -127,8 +143,13 @@ export function VocabularyDictationPracticePage() {
     if (autoPlayedItemIdRef.current === item.id) return;
 
     autoPlayedItemIdRef.current = item.id;
+
+    if (consumeTtsPreplayedForItem(item.id)) {
+      return;
+    }
+
     const timer = window.setTimeout(() => {
-      void runPlayback();
+      void runPlayback(false);
     }, 120);
     return () => clearTimeout(timer);
   }, [item, completed, runPlayback]);
@@ -209,10 +230,9 @@ export function VocabularyDictationPracticePage() {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => void runPlayback()}
-            disabled={isPlaying}
+            onClick={handleReplayPress}
           >
-            {isPlaying ? "Playing..." : "🔊 Replay"}
+            {isPlaying ? "Stop" : "🔊 Replay"}
           </button>
         </div>
 

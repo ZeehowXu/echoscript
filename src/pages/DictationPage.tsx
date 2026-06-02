@@ -114,7 +114,9 @@ export function DictationPage() {
       setTtsUnsupported(false);
 
       try {
-        const result = await playSentence(sentence);
+        const result = await playSentence(sentence, {
+          primeBeforeSpeak: !isReplay,
+        });
 
         if (generation !== playGenerationRef.current) return;
 
@@ -131,8 +133,12 @@ export function DictationPage() {
           setTtsUnsupported(true);
         }
 
+        const message =
+          error instanceof TtsError && error.message
+            ? error.message
+            : "Audio unavailable. Please try again.";
         setPlayState("failed");
-        setPlayNotice("Audio unavailable. Please try again.");
+        setPlayNotice(message);
       }
     },
     [sentence],
@@ -148,6 +154,7 @@ export function DictationPage() {
   useEffect(() => {
     if (!sentence || autoPlayed.current) return;
     autoPlayed.current = true;
+
     const timer = window.setTimeout(() => {
       void runPlayback(false);
     }, 300);
@@ -155,7 +162,12 @@ export function DictationPage() {
   }, [sentence, runPlayback]);
 
   const handleReplay = () => {
-    if (playState === "playing" || playState === "generating") return;
+    if (playState === "playing" || playState === "generating") {
+      stopPlayback();
+      playGenerationRef.current += 1;
+      setPlayState("idle");
+      return;
+    }
     void runPlayback(true);
   };
 
@@ -249,7 +261,7 @@ export function DictationPage() {
     playState === "generating"
       ? "Generating audio..."
       : playState === "playing"
-        ? "Playing..."
+        ? "Stop"
         : playState === "failed"
           ? "Retry"
           : "Replay";
@@ -274,10 +286,15 @@ export function DictationPage() {
           type="button"
           className={`play-btn ${isPlaying ? "play-btn-active" : ""} ${playState === "failed" ? "play-btn-failed" : ""}`}
           onClick={handleReplay}
-          disabled={isPlaying}
           aria-label={playLabel}
         >
-          {isPlaying ? "…" : playState === "failed" ? "↻" : "▶"}
+          {playState === "playing"
+            ? "■"
+            : playState === "generating"
+              ? "…"
+              : playState === "failed"
+                ? "↻"
+                : "▶"}
         </button>
 
         <p className="dictation-play-status" aria-live="polite">

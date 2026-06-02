@@ -8,6 +8,17 @@ export type {
 export { TtsError } from "./types";
 
 export {
+  consumeTtsPreplayedForItem,
+  isMobileBrowser,
+  markTtsPreplayedForItem,
+  MOBILE_TTS_PLAY_HINT,
+  prepareSpeechSynthesisForPlayback,
+  primeSpeechSynthesisBeforeAutoPlay,
+  shouldAutoPlayTts,
+} from "./device";
+
+export {
+  BROWSER_SPEAK_TIMEOUT_MS,
   BROWSER_TTS_PITCH,
   BROWSER_TTS_RATE,
   BROWSER_TTS_VOLUME,
