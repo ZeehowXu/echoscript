@@ -1,10 +1,14 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Layout } from "../components/Layout";
+import { useAuth } from "../hooks/useAuth";
 import {
   getReviewQueue,
   recordVocabularyReview,
 } from "../lib/vocabularyStorage";
+import { normalizeVocabularyKey } from "../lib/vocabulary/normalize";
+import { upsertReviewProgressToCloud } from "../lib/vocabulary/reviewCloudSync";
+import { normalizeVocabularyStatus } from "../lib/vocabulary/status";
 import {
   consumeTtsPreplayedForItem,
   isTtsSupported,
@@ -19,11 +23,13 @@ import type { VocabularyReviewResult } from "../types/vocabulary";
 
 export function VocabularyReviewPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [index, setIndex] = useState(0);
   const [queue] = useState(() => getReviewQueue());
   const [showAnswer, setShowAnswer] = useState(false);
   const [playState, setPlayState] = useState<PlaybackUiState>("idle");
   const [playNotice, setPlayNotice] = useState<string | null>(null);
+  const [cloudSyncNotice, setCloudSyncNotice] = useState<string | null>(null);
   const [ttsUnsupported, setTtsUnsupported] = useState(!isTtsSupported());
   const [replayCount, setReplayCount] = useState(0);
 
@@ -97,6 +103,7 @@ export function VocabularyReviewPage() {
     setShowAnswer(false);
     setPlayState("idle");
     setPlayNotice(null);
+    setCloudSyncNotice(null);
     setReplayCount(0);
   };
 
@@ -113,7 +120,21 @@ export function VocabularyReviewPage() {
 
   const handleMemoryResult = (result: VocabularyReviewResult) => {
     if (!item || !showAnswer) return;
-    recordVocabularyReview(item.id, result, replayCount);
+    const memoryState = recordVocabularyReview(item.id, result, replayCount);
+
+    if (user) {
+      void upsertReviewProgressToCloud({
+        userId: user.id,
+        vocabulary_key: normalizeVocabularyKey(item.text),
+        status: normalizeVocabularyStatus(result),
+        review_count: memoryState.reviewCount,
+        last_reviewed_at: memoryState.lastReviewedAt ?? new Date().toISOString(),
+      }).catch((error) => {
+        console.error("Failed to upsert review progress to cloud:", error);
+        setCloudSyncNotice("Progress saved locally. Cloud sync failed.");
+      });
+    }
+
     window.setTimeout(() => {
       goNext();
     }, 160);
@@ -169,6 +190,12 @@ export function VocabularyReviewPage() {
       <p className="vocab-review-progress">
         {index + 1} / {queue.length}
       </p>
+
+      {cloudSyncNotice && (
+        <p className="practice-hint vocab-sync-notice" aria-live="polite">
+          {cloudSyncNotice}
+        </p>
+      )}
 
       <article className="vocab-review-card">
         <div className="vocab-review-badges">

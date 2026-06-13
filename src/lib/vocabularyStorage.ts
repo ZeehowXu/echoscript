@@ -7,6 +7,7 @@ import type {
   VocabularyReviewResult,
   VocabularyStats,
 } from "../types/vocabulary";
+import type { VocabularyDictationProgressMap } from "../types/dictation";
 import {
   generateVocabularyAssist,
   isPlaceholderMeaning,
@@ -14,6 +15,17 @@ import {
   TYPO_MEANING_ZH,
 } from "./vocabulary/assist";
 import { normalizeVocabularyKey } from "./vocabulary/normalize";
+import {
+  mergeBuiltInCardsWithLocalState,
+  remapDictationProgressForBuiltInItems,
+} from "./vocabulary/builtinMerge";
+import type { ParsedVocabularyCard } from "./vocabulary/service";
+import {
+  collectLocalReviewProgressNotInCloud,
+  loadReviewProgressFromCloud,
+  mergeLocalAndCloudReviewProgress,
+  upsertReviewProgressToCloud,
+} from "./vocabulary/reviewCloudSync";
 import {
   getVocabularyStatusStats,
   normalizeVocabularyStatus,
@@ -26,6 +38,7 @@ const KEYS = {
   batches: "echoscript_vocabulary_batches",
   memoryStates: "echoscript_vocabulary_memory_states",
   reviewEvents: "echoscript_vocabulary_review_events",
+  dictationProgress: "echoscript_vocabulary_dictation_progress",
 } as const;
 
 function readJson<T>(key: string, fallback: T): T {
@@ -187,6 +200,43 @@ function loadAndRepairItems(): VocabularyItem[] {
     writeJson(KEYS.items, repaired);
   }
   return repaired;
+}
+
+export function readVocabularyItemsRaw(): VocabularyItem[] {
+  return loadAndRepairItems();
+}
+
+export function readVocabularyMemoryStatesRaw(): VocabularyMemoryState[] {
+  return readJson<VocabularyMemoryState[]>(KEYS.memoryStates, []);
+}
+
+export function reconcileVocabularyWithBuiltInSource(
+  builtInCards: ParsedVocabularyCard[],
+): number {
+  const previousItems = loadAndRepairItems();
+  const previousMemory = readJson<VocabularyMemoryState[]>(KEYS.memoryStates, []);
+  const previousDictation = readJson<VocabularyDictationProgressMap>(
+    KEYS.dictationProgress,
+    {},
+  );
+
+  const { items, memoryStates } = mergeBuiltInCardsWithLocalState(
+    builtInCards,
+    previousItems,
+    previousMemory,
+  );
+
+  writeJson(KEYS.items, items);
+  writeJson(KEYS.memoryStates, memoryStates);
+
+  const remappedDictation = remapDictationProgressForBuiltInItems(
+    items,
+    previousItems,
+    previousDictation,
+  );
+  writeJson(KEYS.dictationProgress, remappedDictation);
+
+  return items.length;
 }
 
 function defaultMemoryState(vocabularyId: string): VocabularyMemoryState {
@@ -481,4 +531,32 @@ export function groupItemsByCategory(
     map.set(item.category, list);
   }
   return map;
+}
+
+/** Load cloud review progress, merge into localStorage (cloud wins). */
+export async function syncReviewProgressFromCloud(userId: string): Promise<void> {
+  const cloudProgress = await loadReviewProgressFromCloud(userId);
+  const localItems = loadAndRepairItems();
+  const localMemory = readJson<VocabularyMemoryState[]>(KEYS.memoryStates, []);
+
+  const { items, memoryStates } = mergeLocalAndCloudReviewProgress(
+    localItems,
+    localMemory,
+    cloudProgress,
+  );
+
+  saveVocabularyItems(items);
+  saveVocabularyMemoryStates(memoryStates);
+
+  const toUpload = collectLocalReviewProgressNotInCloud(
+    items,
+    memoryStates,
+    cloudProgress,
+  );
+
+  await Promise.all(
+    toUpload.map((entry) =>
+      upsertReviewProgressToCloud({ userId, ...entry }),
+    ),
+  );
 }

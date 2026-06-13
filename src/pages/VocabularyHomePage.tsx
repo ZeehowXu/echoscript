@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
 import { Layout } from "../components/Layout";
-import { initializeBuiltInVocabularyIfNeeded } from "../lib/vocabulary/builtin";
+import { useAuth } from "../hooks/useAuth";
+import { syncBuiltInVocabularyFromSource } from "../lib/vocabulary/builtin";
 import {
   formatStatusPercent,
   getVocabularyStatusStats,
@@ -12,7 +13,11 @@ import {
   prepareSpeechSynthesisForPlayback,
   speakText,
 } from "../lib/tts";
-import { getReviewQueue, getVocabularyItems } from "../lib/vocabularyStorage";
+import {
+  getReviewQueue,
+  getVocabularyItems,
+  syncReviewProgressFromCloud,
+} from "../lib/vocabularyStorage";
 
 type ImportLocationState = {
   importSuccessMessage?: string;
@@ -46,13 +51,14 @@ function getReviewHint(stats: ReturnType<typeof getVocabularyStatusStats>): stri
 }
 
 export function VocabularyHomePage() {
+  const { user } = useAuth();
   const location = useLocation();
   const locationState = location.state as ImportLocationState | null;
   const importSuccessFromNav = locationState?.importSuccessMessage ?? null;
   const [importBannerDismissed, setImportBannerDismissed] = useState(false);
-  const [initStatus, setInitStatus] = useState<InitStatus>(() =>
-    getVocabularyItems().length > 0 ? "ready" : "loading",
-  );
+  const [initStatus, setInitStatus] = useState<InitStatus>("loading");
+  const [dataVersion, setDataVersion] = useState(0);
+  const [cloudSyncError, setCloudSyncError] = useState("");
 
   useEffect(() => {
     if (importSuccessFromNav) {
@@ -61,22 +67,16 @@ export function VocabularyHomePage() {
   }, [importSuccessFromNav]);
 
   useEffect(() => {
-    if (getVocabularyItems().length > 0) {
-      return;
-    }
-
     let cancelled = false;
 
-    void initializeBuiltInVocabularyIfNeeded().then((result) => {
+    void syncBuiltInVocabularyFromSource().then((result) => {
       if (cancelled) return;
-      if (
-        result.status === "fetch_failed" ||
-        result.status === "validation_failed"
-      ) {
-        setInitStatus("failed");
+      if (result.status === "success") {
+        setInitStatus("ready");
+        setDataVersion((v) => v + 1);
         return;
       }
-      setInitStatus("ready");
+      setInitStatus(getVocabularyItems().length > 0 ? "ready" : "failed");
     });
 
     return () => {
@@ -84,9 +84,37 @@ export function VocabularyHomePage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!user || initStatus !== "ready") return;
+    if (getVocabularyItems().length === 0) return;
+
+    let cancelled = false;
+
+    void syncReviewProgressFromCloud(user.id)
+      .then(() => {
+        if (!cancelled) {
+          setCloudSyncError("");
+          setDataVersion((v) => v + 1);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to sync review progress from cloud:", error);
+        if (!cancelled) {
+          setCloudSyncError(
+            "Could not load cloud progress. Showing local data only.",
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, initStatus]);
+
   const importSuccessMessage =
     importSuccessFromNav && !importBannerDismissed ? importSuccessFromNav : null;
 
+  void dataVersion;
   const items = getVocabularyItems();
   const statusStats = getVocabularyStatusStats(items);
   const reviewHint = getReviewHint(statusStats);
@@ -166,6 +194,14 @@ export function VocabularyHomePage() {
           </Link>
         </div>
         {reviewHint && <p className="practice-hint vocab-review-hint">{reviewHint}</p>}
+        <p className="practice-hint vocab-sync-hint">
+          {user
+            ? "Progress synced to your account."
+            : "Progress is saved on this browser only. Sign in to sync across devices."}
+        </p>
+        {cloudSyncError && (
+          <p className="form-error vocab-sync-error">{cloudSyncError}</p>
+        )}
       </section>
 
       {importSuccessMessage && (

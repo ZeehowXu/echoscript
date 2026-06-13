@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
 import { Layout } from "../components/Layout";
-import { initializeBuiltInVocabularyIfNeeded } from "../lib/vocabulary/builtin";
+import { useAuth } from "../hooks/useAuth";
+import { syncBuiltInVocabularyFromSource } from "../lib/vocabulary/builtin";
 import {
   formatDictationPercent,
   getDictationPracticeQueue,
   getDictationStatusStats,
+  syncDictationProgressFromCloud,
 } from "../lib/vocabulary/dictationStorage";
 import {
   markTtsPreplayedForItem,
@@ -32,27 +34,22 @@ const STATUS_SEGMENTS = [
 ];
 
 export function VocabularyDictationHomePage() {
-  const [initStatus, setInitStatus] = useState<InitStatus>(() =>
-    getVocabularyItems().length > 0 ? "ready" : "loading",
-  );
+  const { user } = useAuth();
+  const [initStatus, setInitStatus] = useState<InitStatus>("loading");
+  const [dataVersion, setDataVersion] = useState(0);
+  const [cloudSyncError, setCloudSyncError] = useState("");
 
   useEffect(() => {
-    if (getVocabularyItems().length > 0) {
-      return;
-    }
-
     let cancelled = false;
 
-    void initializeBuiltInVocabularyIfNeeded().then((result) => {
+    void syncBuiltInVocabularyFromSource().then((result) => {
       if (cancelled) return;
-      if (
-        result.status === "fetch_failed" ||
-        result.status === "validation_failed"
-      ) {
-        setInitStatus("failed");
+      if (result.status === "success") {
+        setInitStatus("ready");
+        setDataVersion((v) => v + 1);
         return;
       }
-      setInitStatus("ready");
+      setInitStatus(getVocabularyItems().length > 0 ? "ready" : "failed");
     });
 
     return () => {
@@ -60,6 +57,34 @@ export function VocabularyDictationHomePage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!user || initStatus !== "ready") return;
+    if (getVocabularyItems().length === 0) return;
+
+    let cancelled = false;
+
+    void syncDictationProgressFromCloud(user.id)
+      .then(() => {
+        if (!cancelled) {
+          setCloudSyncError("");
+          setDataVersion((v) => v + 1);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to sync dictation progress from cloud:", error);
+        if (!cancelled) {
+          setCloudSyncError(
+            "Could not load cloud progress. Showing local data only.",
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, initStatus]);
+
+  void dataVersion;
   const items = getVocabularyItems();
   const stats = getDictationStatusStats(items);
 
@@ -120,6 +145,14 @@ export function VocabularyDictationHomePage() {
             Start Dictation
           </Link>
         </div>
+        <p className="practice-hint vocab-sync-hint">
+          {user
+            ? "Dictation progress synced to your account."
+            : "Dictation progress is saved on this browser only. Sign in to sync across devices."}
+        </p>
+        {cloudSyncError && (
+          <p className="form-error vocab-sync-error">{cloudSyncError}</p>
+        )}
       </section>
 
       <section className="vocab-status-overview">

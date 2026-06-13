@@ -1,12 +1,15 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Layout } from "../components/Layout";
+import { useAuth } from "../hooks/useAuth";
 import { dictationAnswersMatch } from "../lib/vocabulary/dictationAnswer";
+import { upsertDictationProgressToCloud } from "../lib/vocabulary/dictationCloudSync";
 import { buildLetterHintDisplay } from "../lib/vocabulary/dictationHints";
 import {
   getDictationPracticeQueue,
   recordDictationAttempt,
 } from "../lib/vocabulary/dictationStorage";
+import { normalizeVocabularyKey } from "../lib/vocabulary/normalize";
 import { getDisplayMeaningZh } from "../lib/vocabulary/assist";
 import { getVocabularyItems } from "../lib/vocabularyStorage";
 import {
@@ -23,6 +26,7 @@ type Feedback = "idle" | "correct" | "incorrect" | "answer_shown";
 
 export function VocabularyDictationPracticePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const items = getVocabularyItems();
   const [queue] = useState(() => getDictationPracticeQueue(items));
   const [index, setIndex] = useState(0);
@@ -31,6 +35,7 @@ export function VocabularyDictationPracticePage() {
   const [wrongAttempts, setWrongAttempts] = useState(0);
   const [playState, setPlayState] = useState<PlaybackUiState>("idle");
   const [playNotice, setPlayNotice] = useState<string | null>(null);
+  const [cloudSyncNotice, setCloudSyncNotice] = useState<string | null>(null);
   const [ttsUnsupported, setTtsUnsupported] = useState(!isTtsSupported());
   const [sessionCorrect, setSessionCorrect] = useState(0);
   const [sessionIncorrect, setSessionIncorrect] = useState(0);
@@ -96,6 +101,29 @@ export function VocabularyDictationPracticePage() {
     setWrongAttempts(0);
     setPlayState("idle");
     setPlayNotice(null);
+    setCloudSyncNotice(null);
+  };
+
+  const syncDictationToCloud = (
+    progress: ReturnType<typeof recordDictationAttempt>,
+    itemText: string,
+  ) => {
+    if (!user) return;
+
+    void upsertDictationProgressToCloud({
+      userId: user.id,
+      vocabulary_key: normalizeVocabularyKey(itemText),
+      status: progress.status,
+      attempts: progress.attempts,
+      correct_count: progress.correctCount,
+      incorrect_count: progress.incorrectCount,
+      last_attempt_at: progress.lastAttemptAt ?? new Date().toISOString(),
+    }).catch((error) => {
+      console.error("Failed to upsert dictation progress to cloud:", error);
+      setCloudSyncNotice(
+        "Dictation progress saved locally. Cloud sync failed.",
+      );
+    });
   };
 
   const goNext = (endedCorrect: boolean) => {
@@ -122,12 +150,14 @@ export function VocabularyDictationPracticePage() {
     if (!trimmed) return;
 
     if (dictationAnswersMatch(trimmed, item.text)) {
-      recordDictationAttempt(item.id, true);
+      const progress = recordDictationAttempt(item.id, true);
+      syncDictationToCloud(progress, item.text);
       setFeedback("correct");
       return;
     }
 
-    recordDictationAttempt(item.id, false);
+    const progress = recordDictationAttempt(item.id, false);
+    syncDictationToCloud(progress, item.text);
     setWrongAttempts((n) => n + 1);
     setFeedback("incorrect");
     setInput("");
@@ -215,6 +245,12 @@ export function VocabularyDictationPracticePage() {
       <p className="vocab-review-progress">
         第 {index + 1} / {queue.length} 个
       </p>
+
+      {cloudSyncNotice && (
+        <p className="practice-hint vocab-sync-notice" aria-live="polite">
+          {cloudSyncNotice}
+        </p>
+      )}
 
       <article className="vocab-review-card dictation-practice-card">
         {item.phonetic && <p className="vocab-phonetic">{item.phonetic}</p>}

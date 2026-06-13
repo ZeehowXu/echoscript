@@ -5,6 +5,13 @@ import type {
   DictationStatusStats,
   VocabularyDictationProgressMap,
 } from "../../types/dictation";
+import {
+  collectLocalDictationProgressNotInCloud,
+  loadDictationProgressFromCloud,
+  mergeLocalAndCloudDictationProgress,
+  upsertDictationProgressToCloud,
+} from "./dictationCloudSync";
+import { getVocabularyItems } from "../vocabularyStorage";
 
 const KEY = "echoscript_vocabulary_dictation_progress";
 
@@ -105,4 +112,33 @@ export function getDictationPracticeQueue(
 export function formatDictationPercent(count: number, total: number): string {
   if (total === 0) return "0%";
   return `${((count / total) * 100).toFixed(1)}%`;
+}
+
+/** Load cloud dictation progress, merge into localStorage (cloud wins). */
+export async function syncDictationProgressFromCloud(
+  userId: string,
+): Promise<void> {
+  const cloudProgress = await loadDictationProgressFromCloud(userId);
+  const localProgress = readProgressMap();
+  const items = getVocabularyItems();
+
+  const merged = mergeLocalAndCloudDictationProgress(
+    localProgress,
+    cloudProgress,
+    items,
+  );
+
+  writeProgressMap(merged);
+
+  const toUpload = collectLocalDictationProgressNotInCloud(
+    merged,
+    cloudProgress,
+    items,
+  );
+
+  await Promise.all(
+    toUpload.map((entry) =>
+      upsertDictationProgressToCloud({ userId, ...entry }),
+    ),
+  );
 }

@@ -131,6 +131,47 @@ function parseBlockToCard(
   };
 }
 
+export function parseBuiltInVocabularyCards(rawInput: string): {
+  cards: ParsedVocabularyCard[];
+  invalidFormatErrors: ValidationError[];
+  duplicateInFileErrors: ValidationError[];
+} {
+  const blocks = splitStructuredBlocks(rawInput);
+  const cards: ParsedVocabularyCard[] = [];
+  const duplicateInFileErrors: ValidationError[] = [];
+  const invalidFormatErrors: ValidationError[] = [];
+  const seenInInput = new Set<string>();
+
+  blocks.forEach((block, index) => {
+    const blockIndex = index + 1;
+    const parsed = parseBlockToCard(block, blockIndex);
+
+    if (!parsed.ok) {
+      invalidFormatErrors.push(parsed.error);
+      return;
+    }
+
+    const { normalizedText } = parsed.card;
+
+    if (seenInInput.has(normalizedText)) {
+      duplicateInFileErrors.push({
+        blockIndex,
+        message: `Block ${blockIndex}: duplicate vocabulary item "${parsed.card.text}".`,
+        text: parsed.card.text,
+      });
+      return;
+    }
+
+    seenInInput.add(normalizedText);
+    cards.push({
+      blockIndex,
+      ...parsed.card,
+    });
+  });
+
+  return { cards, invalidFormatErrors, duplicateInFileErrors };
+}
+
 export function validateVocabularyImport(
   rawInput: string,
 ): VocabularyImportValidation {
