@@ -65,6 +65,59 @@ ul {
   margin-bottom: 20px;
 }
 
+.auth-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.auth-status-link {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.auth-status-signed-in {
+  justify-content: space-between;
+}
+
+.auth-status-email {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.auth-status-signout {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+}
+
+.auth-form-footer {
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.auth-form-footer a {
+  color: var(--primary);
+  font-weight: 500;
+}
+
 .back-link {
   display: inline-block;
   color: var(--primary);

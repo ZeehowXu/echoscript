@@ -1,11 +1,13 @@
 import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
+import { AuthStatus } from "./AuthStatus";
 
 interface LayoutProps {
   children: ReactNode;
   backTo?: string;
   backLabel?: string;
   title?: string;
+  showAuthStatus?: boolean;
 }
 
 export function Layout({
@@ -13,9 +15,11 @@ export function Layout({
   backTo,
   backLabel = "返回",
   title,
+  showAuthStatus = true,
 }: LayoutProps) {
   return (
     <div className="layout">
+      {showAuthStatus && <AuthStatus />}
       <header className="layout-header">
         {backTo ? (
           <Link to={backTo} className="back-link">

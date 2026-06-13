@@ -5,10 +5,13 @@ import {
   Routes,
   useParams,
 } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthProvider";
 import { DictationPage } from "./pages/DictationPage";
 import { HomePage } from "./pages/HomePage";
 import { LessonDetailPage } from "./pages/LessonDetailPage";
+import { LoginPage } from "./pages/LoginPage";
 import { NewLessonPage } from "./pages/NewLessonPage";
+import { SignupPage } from "./pages/SignupPage";
 import { WrongBookPage } from "./pages/WrongBookPage";
 import { AddVocabularyPage } from "./pages/AddVocabularyPage";
 import { VocabularyHomePage } from "./pages/VocabularyHomePage";
@@ -23,10 +26,13 @@ function DictationPageRoute() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/lessons/new" element={<NewLessonPage />} />
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/lessons/new" element={<NewLessonPage />} />
         <Route path="/lessons/:lessonId" element={<LessonDetailPage />} />
         <Route
           path="/lessons/:lessonId/sentences/:sentenceId"
@@ -45,7 +51,8 @@ export default function App() {
           element={<VocabularyDictationPracticePage />}
         />
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
