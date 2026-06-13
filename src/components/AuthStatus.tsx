@@ -8,26 +8,29 @@ export function AuthStatus() {
     return null;
   }
 
-  if (!user) {
-    return (
-      <div className="auth-status">
-        <Link to="/login" className="auth-status-link">
-          Sign in to sync progress
-        </Link>
-      </div>
-    );
-  }
-
   return (
-    <div className="auth-status auth-status-signed-in">
-      <span className="auth-status-email">{user.email}</span>
-      <button
-        type="button"
-        className="auth-status-signout"
-        onClick={() => void signOut()}
-      >
-        Sign out
-      </button>
+    <div className="top-auth-bar">
+      <div className="auth-status">
+        {!user ? (
+          <>
+            <span className="auth-status-hint">Progress saved on this browser</span>
+            <Link to="/login" className="auth-link">
+              Sign in to sync
+            </Link>
+          </>
+        ) : (
+          <>
+            <span className="auth-status-email">{user.email}</span>
+            <button
+              type="button"
+              className="auth-link auth-signout-btn"
+              onClick={() => void signOut()}
+            >
+              Sign out
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

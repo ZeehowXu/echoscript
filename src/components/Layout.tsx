@@ -19,15 +19,13 @@ export function Layout({
 }: LayoutProps) {
   return (
     <div className="layout">
-      {showAuthStatus && <AuthStatus />}
       <header className="layout-header">
+        {showAuthStatus && <AuthStatus />}
         {backTo ? (
           <Link to={backTo} className="back-link">
             ← {backLabel}
           </Link>
-        ) : (
-          <span />
-        )}
+        ) : null}
         {title && <h1 className="layout-title">{title}</h1>}
       </header>
       <main className="layout-main">{children}</main>
